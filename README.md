@@ -46,12 +46,12 @@ Invoke-WebRequest 'https://github.com/Gtyro/nexus-testgate/releases/latest/downl
 python "$env:TEMP/testgate.pyz" --policy $env:TESTGATE_POLICY
 ```
 
-下载入口同时提供 `default-policy.json` 和 SHA256SUMS。自动化应校验预先信任的校验值，并使用固定版本入口，例如 `https://github.com/Gtyro/nexus-testgate/releases/download/v0.1.0/testgate.pyz`。
+下载入口同时提供 `default-policy.json` 和 SHA256SUMS。自动化应校验预先信任的校验值，并使用固定版本入口，例如 `https://github.com/Gtyro/nexus-testgate/releases/download/v0.1.2/testgate.pyz`。
 
 统一规则使用本地 JSON 或 HTTPS JSON，可在每台机器/CI 的环境变量中设置一次，后续不必逐项目配置：
 
 ```bash
-export TESTGATE_POLICY='https://github.com/Gtyro/nexus-testgate/releases/download/v0.1.0/default-policy.json'
+export TESTGATE_POLICY='https://github.com/Gtyro/nexus-testgate/releases/download/v0.1.2/default-policy.json'
 # 需要固定规则内容时，再设置已确认的 SHA-256：
 # export TESTGATE_POLICY_SHA256='已确认的策略文件SHA256'
 python /tmp/testgate.pyz
@@ -122,7 +122,7 @@ python tools/build.py
 python dist/testgate.pyz --version
 ```
 
-`dist/testgate.pyz`、`dist/default-policy.json` 与 `dist/SHA256SUMS` 可发布到任意 HTTPS 下载入口。也可使用 `python -m pip install .` 安装 `testgate` 命令，或在 uv 可用时使用 `uvx --from git+https://github.com/Gtyro/nexus-testgate@v0.1.0 testgate`；源码和单文件分发均不依赖 zero-nexus。
+`dist/testgate.pyz`、`dist/default-policy.json` 与 `dist/SHA256SUMS` 可发布到任意 HTTPS 下载入口。也可使用 `python -m pip install .` 安装 `testgate` 命令，或在 uv 可用时使用 `uvx --from git+https://github.com/Gtyro/nexus-testgate@v0.1.2 testgate`；源码和单文件分发均不依赖 zero-nexus。
 
 GitHub Actions 自动测试 Linux/macOS/Windows 上的 Python 3.10 和 3.12；Windows 验证策略加载、打包与容器参数，本机执行测试仅运行在 POSIX。Linux CI 额外使用 Docker 验证资源限制。推送 `v*` 标签会构建 zipapp 并附加到 GitHub Release。
 

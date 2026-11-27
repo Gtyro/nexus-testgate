@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from testgate.policy import HTTPSRedirects, PolicyError, load, validate
 from testgate.backends import Backend
+from testgate.backends import _group_has_exited
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +94,26 @@ class PolicyTests(unittest.TestCase):
             for flag in ("--read-only", "--memory", "--memory-swap", "--cpus", "--pids-limit", "--network", "--tmpfs"):
                 self.assertIn(flag, created)
             self.assertEqual(created[created.index("--network") + 1], "none")
+
+    def test_darwin_permission_error_only_ignored_for_exited_groups(self):
+        backend = Backend({"backend": {"type": "native"}}, ROOT)
+        with patch("testgate.backends.os.name", "posix"), patch("testgate.backends.sys.platform", "darwin"), patch("testgate.backends.os.killpg", side_effect=PermissionError), patch("testgate.backends._group_has_exited") as exited:
+            process = type("Process", (), {"pid": 12345})()
+            exited.return_value = True
+            backend.cleanup(process)
+            exited.return_value = False
+            with self.assertRaises(PermissionError):
+                backend.cleanup(process)
+
+    def test_group_exit_probe_does_not_ignore_live_members_or_probe_errors(self):
+        with patch("testgate.backends.subprocess.run") as probe:
+            probe.return_value.returncode = 0
+            probe.return_value.stdout = '12345 Z\n67890 S\n'
+            self.assertTrue(_group_has_exited(12345))
+            probe.return_value.stdout = '12345 S\n'
+            self.assertFalse(_group_has_exited(12345))
+            probe.return_value.returncode = 1
+            self.assertFalse(_group_has_exited(12345))
 
 
 @unittest.skipUnless(os.name == "posix", "native runner requires POSIX")

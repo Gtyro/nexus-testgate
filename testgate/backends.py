@@ -4,6 +4,7 @@ import os
 import json
 import signal
 import subprocess
+import sys
 import uuid
 
 
@@ -65,6 +66,11 @@ class Backend:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+                except PermissionError:
+                    # Darwin can report EPERM for an already empty process group.
+                    # Only accept it after confirming that no live group member remains.
+                    if sys.platform != "darwin" or not _group_has_exited(process.pid):
+                        raise
             elif process.poll() is None:
                 process.kill()
         if self.name:
@@ -75,3 +81,16 @@ class Backend:
             )
             if removed.returncode and b"No such container" not in removed.stderr:
                 raise RuntimeError(f"could not remove test container {self.name}")
+
+
+def _group_has_exited(group):
+    inspected = subprocess.run(
+        ["ps", "-axo", "pgid=,stat="], capture_output=True, text=True, timeout=2,
+    )
+    if inspected.returncode:
+        return False
+    for line in inspected.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[0] == str(group) and not fields[1].startswith("Z"):
+            return False
+    return True
