@@ -124,7 +124,7 @@ python dist/testgate.pyz --version
 
 `dist/testgate.pyz`、`dist/default-policy.json` 与 `dist/SHA256SUMS` 可发布到任意 HTTPS 下载入口。也可使用 `python -m pip install .` 安装 `testgate` 命令，或在 uv 可用时使用 `uvx --from git+https://github.com/Gtyro/nexus-testgate@v0.1.2 testgate`；源码和单文件分发均不依赖 zero-nexus。
 
-GitHub Actions 自动测试 Linux/macOS/Windows 上的 Python 3.10 和 3.12；Windows 验证策略加载、打包与容器参数，本机执行测试仅运行在 POSIX。Linux CI 额外使用 Docker 验证资源限制。推送 `v*` 标签会构建 zipapp 并附加到 GitHub Release。
+GitHub Actions 自动测试 Linux/macOS/Windows 上的 Python 3.10 和 3.12；Windows 验证策略加载、打包与容器参数，本机执行测试仅运行在 POSIX。Linux CI 额外使用 Docker 验证资源限制。推送 `v*` 标签后，必须先通过完整跨平台验证，才会构建 zipapp 并附加到 GitHub Release。
 
 手动运行 Docker 验证：
 
