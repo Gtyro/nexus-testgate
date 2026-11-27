@@ -95,6 +95,7 @@ class PolicyTests(unittest.TestCase):
                 self.assertIn(flag, created)
             self.assertEqual(created[created.index("--network") + 1], "none")
 
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group behavior")
     def test_darwin_permission_error_only_ignored_for_exited_groups(self):
         backend = Backend({"backend": {"type": "native"}}, ROOT)
         with patch("testgate.backends.os.name", "posix"), patch("testgate.backends.sys.platform", "darwin"), patch("testgate.backends.os.killpg", side_effect=PermissionError), patch("testgate.backends._group_has_exited") as exited:
