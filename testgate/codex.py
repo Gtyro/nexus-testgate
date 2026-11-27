@@ -108,7 +108,12 @@ def install_local(home, bin_dir=None, *, update=False):
         if launcher.exists() or launcher.is_symlink():
             raise ValueError(f"launcher already exists and is not owned by this installation: {launcher}")
     resource = files("testgate").joinpath("integrations", "codex", OWNER)
-    contents = {relative: resource.joinpath(*relative.split("/")).read_bytes() for relative in RESOURCES}
+    try:
+        contents = {relative: resource.joinpath(*relative.split("/")).read_bytes() for relative in RESOURCES}
+    finally:
+        container = getattr(resource, "root", None)
+        if isinstance(container, zipfile.ZipFile):
+            container.close()
     contents["runtime/testgate.pyz"] = runtime_archive()
     launcher_bytes = _launcher_content(destination)
     manifest = {

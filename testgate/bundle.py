@@ -25,6 +25,12 @@ def runtime_archive() -> bytes:
                 else:
                     add(name, item.read_bytes())
 
-        walk(files("testgate"), "testgate")
+        resource = files("testgate")
+        try:
+            walk(resource, "testgate")
+        finally:
+            container = getattr(resource, "root", None)
+            if isinstance(container, zipfile.ZipFile):
+                container.close()
         add("__main__.py", b"from testgate.cli import main\nraise SystemExit(main())\n")
     return output.getvalue()

@@ -75,6 +75,7 @@ class CodexIntegrationTests(unittest.TestCase):
         checked = subprocess.run([
             sys.executable, str(helper), "--version",
         ], cwd=self.project, capture_output=True, text=True, timeout=10)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout.strip(), __version__)
         removed = self.manage("uninstall", runtime=installed_runtime)
         self.assertEqual(removed.returncode, 0, removed.stderr)
@@ -137,7 +138,9 @@ class CodexIntegrationTests(unittest.TestCase):
     def test_online_update_verifies_download_and_updates_skill_and_runtime_together(self):
         self.install()
         original = fingerprint(self.home)
-        release = json.dumps({"tag_name": "v0.2.1", "assets": [
+        major, minor, patch_number = map(int, __version__.split("."))
+        future_version = f"{major}.{minor}.{patch_number + 1}"
+        release = json.dumps({"tag_name": "v" + future_version, "assets": [
             {"name": "SHA256SUMS", "id": 1}, {"name": "testgate.pyz", "id": 2},
         ]}).encode()
         with patch("testgate.codex._download", side_effect=[release, b"0" * 64 + b"  testgate.pyz\n", b"corrupt"]):
@@ -149,18 +152,19 @@ class CodexIntegrationTests(unittest.TestCase):
             for item in source.infolist():
                 raw = source.read(item)
                 if item.filename == "testgate/__init__.py":
-                    raw = raw.replace(__version__.encode(), b"0.2.1")
+                    raw = raw.replace(__version__.encode(), future_version.encode())
                 target.writestr(item, raw)
         future = output.getvalue()
         checksum = hashlib.sha256(future).hexdigest().encode() + b"  testgate.pyz\n"
         with patch("testgate.codex._download", side_effect=[release, checksum, future]):
             update_latest(self.home, self.bin)
         record = json.loads((self.skill / ".testgate-install.json").read_text())
-        self.assertEqual(record["version"], "0.2.1")
+        self.assertEqual(record["version"], future_version)
         checked = subprocess.run([
             sys.executable, str(self.skill / "scripts" / "run.py"), "--version",
         ], capture_output=True, text=True, timeout=10)
-        self.assertEqual(checked.stdout.strip(), "0.2.1")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(checked.stdout.strip(), future_version)
 
     @unittest.skipUnless(os.name == "posix", "native test runner requires POSIX")
     def test_reports_and_json_stay_outside_the_target_repository(self):
