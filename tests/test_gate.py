@@ -123,19 +123,24 @@ class RunnerTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        self.outputs = tempfile.TemporaryDirectory()
+        self.addCleanup(self.outputs.cleanup)
+        self.report_dir = Path(self.outputs.name) / "reports"
+        self.report_dir.mkdir()
 
     def invoke(self, code, *, limits=None, checks=None, policy_changes=None, extra=()):
         policy, _ = load()
         policy["name"] = "integration-test"
-        policy["command"] = [sys.executable, "-c", code]
+        policy["command"] = [sys.executable, "-c", "import os; from pathlib import Path; " + code]
         policy["limits"].update(limits or {})
         policy["checks"] = checks or {}
         policy.update(policy_changes or {})
         path = self.root / "policy.json"
         path.write_text(json.dumps(policy))
-        result_path = self.root / "result.json"
+        result_path = Path(self.outputs.name) / "result.json"
+        result_path.unlink(missing_ok=True)
         completed = subprocess.run(
-            [sys.executable, "-m", "testgate", "--policy", str(path), "--cwd", str(self.root), "--json", str(result_path), *extra],
+            [sys.executable, "-m", "testgate", "--policy", str(path), "--cwd", str(self.root), "--json", str(result_path), "--report-dir", str(self.report_dir), *extra],
             cwd=ROOT, capture_output=True, text=True, timeout=10,
         )
         data = json.loads(result_path.read_text()) if result_path.exists() else None
@@ -205,7 +210,7 @@ class RunnerTests(unittest.TestCase):
     def test_report_failure_cannot_be_hidden_by_exit_zero(self):
         xml = '<testsuite><testcase><skipped/></testcase></testsuite>'
         completed, result = self.invoke(
-            f"from pathlib import Path; Path('junit.xml').write_text({xml!r})",
+            f"from pathlib import Path; (Path(os.environ['TESTGATE_REPORT_DIR']) / 'junit.xml').write_text({xml!r})",
             checks={"junit": {"path": "junit.xml", "max_skipped": 0}},
         )
         self.assertEqual(completed.returncode, 126, completed.stderr)
@@ -214,18 +219,18 @@ class RunnerTests(unittest.TestCase):
     def test_missing_stale_and_empty_reports_fail(self):
         for mode in ("missing", "stale", "empty"):
             with self.subTest(mode=mode):
-                path = self.root / "junit.xml"
+                path = self.report_dir / "junit.xml"
                 path.unlink(missing_ok=True)
                 if mode == "stale":
                     path.write_text('<testsuite><testcase/></testsuite>')
-                code = "pass" if mode != "empty" else "from pathlib import Path; Path('junit.xml').write_text('<testsuite/>')"
+                code = "pass" if mode != "empty" else "from pathlib import Path; (Path(os.environ['TESTGATE_REPORT_DIR']) / 'junit.xml').write_text('<testsuite/>')"
                 completed, _ = self.invoke(code, checks={"junit": {"path": "junit.xml"}})
                 self.assertEqual(completed.returncode, 126, completed.stderr)
 
     def test_coverage_and_artifact_budgets(self):
         code = (
             "from pathlib import Path; "
-            "Path('coverage.xml').write_text('<coverage line-rate=\"0.7\" branch-rate=\"0.6\"/>'); "
+            "(Path(os.environ['TESTGATE_REPORT_DIR']) / 'coverage.xml').write_text('<coverage line-rate=\"0.7\" branch-rate=\"0.6\"/>'); "
             "Path('artifact.bin').write_bytes(b'x' * 20)"
         )
         completed, result = self.invoke(code, checks={
@@ -238,8 +243,8 @@ class RunnerTests(unittest.TestCase):
     def test_fresh_reports_can_pass(self):
         code = (
             "from pathlib import Path; "
-            "Path('junit.xml').write_text('<testsuites><testsuite><testcase/></testsuite></testsuites>'); "
-            "Path('coverage.xml').write_text('<coverage line-rate=\"0.9\"/>')"
+            "(Path(os.environ['TESTGATE_REPORT_DIR']) / 'junit.xml').write_text('<testsuites><testsuite><testcase/></testsuite></testsuites>'); "
+            "(Path(os.environ['TESTGATE_REPORT_DIR']) / 'coverage.xml').write_text('<coverage line-rate=\"0.9\"/>')"
         )
         completed, result = self.invoke(code, checks={
             "junit": {"path": "junit.xml", "min_tests": 1},
@@ -299,8 +304,10 @@ class DockerTests(unittest.TestCase):
                 "assert quota / period == 0.5; "
                 "assert len(p('/proc/net/route').read_text().splitlines()) == 1; "
                 "assert os.statvfs('/tmp').f_blocks * os.statvfs('/tmp').f_frsize <= 1048576; "
+                "p(os.environ['TESTGATE_REPORT_DIR'], 'junit.xml').write_text('<testsuite><testcase/></testsuite>'); "
                 "p('/workspace/verified').write_text('ok')"
             )
+            policy["checks"] = {"junit": {"path": "junit.xml"}}
             policy["command"] = ["python", "-c", code]
             policy_path = root / "policy.json"
             policy_path.write_text(json.dumps(policy))

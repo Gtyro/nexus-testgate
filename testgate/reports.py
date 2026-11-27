@@ -44,13 +44,14 @@ def _xml(root, check, previous):
     return ET.fromstring(raw)
 
 
-def check_reports(root, checks, before):
+def check_reports(root, checks, before, report_root=None):
+    report_root = root if report_root is None else report_root
     failures = []
     metrics = {}
     for name, check in checks.items():
         try:
             if name == "junit":
-                document = _xml(root, check, before.get(name))
+                document = _xml(report_root, check, before.get(name))
                 if document.tag not in ("testsuite", "testsuites"):
                     raise ValueError("expected JUnit testsuite/testsuites root")
                 cases = list(document.iter("testcase"))
@@ -64,7 +65,7 @@ def check_reports(root, checks, before):
                 if failed or any(suite.find("error") is not None for suite in document.iter("testsuite")):
                     failures.append("JUnit reports failures/errors")
             elif name == "coverage":
-                document = _xml(root, check, before.get(name))
+                document = _xml(report_root, check, before.get(name))
                 if document.tag != "coverage":
                     raise ValueError("expected Cobertura coverage root")
                 metrics[name] = {}

@@ -11,15 +11,21 @@ from urllib.error import URLError
 from . import __version__
 from .policy import PolicyError, load
 from .runner import run
+from .locations import outside_project
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Enforce shared test budgets across projects.")
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["codex"]:
+        from .codex import main as codex_main
+        return codex_main(argv[1:])
+    parser = argparse.ArgumentParser(description="Enforce shared test budgets across projects.", epilog="Manage the user-level skill with: testgate codex install|update|uninstall|status")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--policy", default=os.environ.get("TESTGATE_POLICY"), help="local JSON file or HTTPS URL; default: built-in policy")
     parser.add_argument("--policy-sha256", default=os.environ.get("TESTGATE_POLICY_SHA256"))
     parser.add_argument("--cwd", type=Path, default=Path.cwd())
-    parser.add_argument("--json", type=Path, help="write a machine-readable result")
+    parser.add_argument("--json", type=Path, help="write a machine-readable result outside the project")
+    parser.add_argument("--report-dir", type=Path, help="retain reports outside the project; default: external temporary directory")
     parser.add_argument("--show-policy", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
@@ -36,7 +42,9 @@ def main(argv=None):
             raise PolicyError("this policy does not permit command overrides")
         if not args.cwd.is_dir():
             raise ValueError("--cwd must be an existing project directory")
-        result, tail = run(policy, digest, args.cwd.resolve(), command or policy["command"])
+        if args.json:
+            args.json = outside_project(args.json, args.cwd)
+        result, tail = run(policy, digest, args.cwd.resolve(), command or policy["command"], report_dir=args.report_dir)
         print(
             f"{'PASS' if result['passed'] else 'FAIL'}: {result['seconds']:.3f}s; "
             f"{result['output_bytes']} output bytes; {result['output_lines']} lines; "

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nexus-testgate"
-version = "0.1.2"
+version = "0.2.0"
 description = "Portable test budgets and shared policy enforcement."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,4 +18,4 @@ testgate = "testgate.cli:main"
 packages = ["testgate"]
 
 [tool.setuptools.package-data]
-testgate = ["default-policy.json"]
+testgate = ["default-policy.json", "integrations/codex/nexus-testgate/SKILL.md", "integrations/codex/nexus-testgate/scripts/run.py"]

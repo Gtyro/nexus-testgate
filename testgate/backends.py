@@ -14,7 +14,10 @@ class Backend:
         self.root = root
         self.name = None
 
-    def prepare(self, command):
+    def prepare(self, command, report_dir=None):
+        if report_dir is not None:
+            report_target = "/testgate-reports" if self.settings["type"] == "docker" else str(report_dir)
+            command = [argument.replace("{testgate_reports}", report_target) for argument in command]
         if self.settings["type"] == "native":
             if os.name != "posix":
                 raise ValueError("native backend requires Linux/macOS; use the Docker backend on Windows")
@@ -41,6 +44,13 @@ class Backend:
             "--workdir", "/workspace", "--env", "PYTHONDONTWRITEBYTECODE=1",
             "--tmpfs", f"/tmp:rw,size={settings.get('tmpfs_bytes', 67108864)}",
         ]
+        if report_dir is not None:
+            if "," in str(report_dir):
+                raise ValueError("Docker report paths cannot contain commas")
+            args.extend([
+                "--mount", f"type=bind,source={report_dir},target=/testgate-reports",
+                "--env", "TESTGATE_REPORT_DIR=/testgate-reports",
+            ])
         for key, flag in (("cpus", "--cpus"), ("pids", "--pids-limit"), ("memory_bytes", "--memory")):
             if key in settings:
                 args.extend([flag, str(settings[key])])

@@ -11,8 +11,8 @@
   },
   "backend": {"type": "native"},
   "checks": {
-    "junit": {"path": "reports/junit.xml", "min_tests": 1, "max_skipped": 0},
-    "coverage": {"path": "reports/coverage.xml", "min_line_rate": 0.8, "min_branch_rate": 0.7},
-    "artifacts": {"paths": ["reports"], "max_bytes": 10485760}
+    "junit": {"path": "junit.xml", "min_tests": 1, "max_skipped": 0},
+    "coverage": {"path": "coverage.xml", "min_line_rate": 0.8, "min_branch_rate": 0.7},
+    "artifacts": {"paths": ["dist"], "max_bytes": 10485760}
   }
 }

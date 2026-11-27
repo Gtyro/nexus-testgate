@@ -5,10 +5,13 @@ import queue
 import subprocess
 import threading
 import time
+import tempfile
+from pathlib import Path
 
 from .backends import Backend
 from . import __version__
 from .reports import check_reports, snapshot
+from .locations import outside_project, temporary_parent
 
 
 TAIL_BYTES = 4096
@@ -31,11 +34,20 @@ def _read_output(stream, messages, stopped, read_size):
             messages.put(exc)
 
 
-def run(policy, digest, root, command):
+def run(policy, digest, root, command, report_dir=None):
+    if report_dir is not None:
+        report_dir = outside_project(report_dir, root)
+        report_dir.mkdir(parents=True, exist_ok=True)
+        return _run(policy, digest, root, command, report_dir)
+    with tempfile.TemporaryDirectory(prefix="testgate-reports-", dir=temporary_parent(root)) as temporary:
+        return _run(policy, digest, root, command, Path(temporary))
+
+
+def _run(policy, digest, root, command, report_dir):
     checks = policy.get("checks", {})
-    before = snapshot(root, checks)
+    before = snapshot(report_dir, checks)
     backend = Backend(policy, root)
-    invocation = backend.prepare(command)
+    invocation = backend.prepare(command, report_dir=report_dir)
     result = {
         "tool_version": __version__, "policy": policy["name"], "policy_sha256": digest,
         "backend": backend.settings["type"], "passed": False, "exit_code": 0,
@@ -56,6 +68,7 @@ def run(policy, digest, root, command):
         process = subprocess.Popen(
             invocation, cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, bufsize=0, start_new_session=os.name == "posix",
+            env={**os.environ, "TESTGATE_REPORT_DIR": str(report_dir)},
         )
         reader = threading.Thread(
             target=_read_output,
@@ -118,7 +131,7 @@ def run(policy, digest, root, command):
                 reader.join(timeout=0.2)
     result["seconds"] = round(time.monotonic() - started, 6)
     if not result["violations"]:
-        failures, metrics = check_reports(root, checks, before)
+        failures, metrics = check_reports(root, checks, before, report_root=report_dir)
         result["checks"] = metrics
         if failures:
             result["violations"].extend(failures)
