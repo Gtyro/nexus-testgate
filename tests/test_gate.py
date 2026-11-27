@@ -49,6 +49,8 @@ class PolicyTests(unittest.TestCase):
             loaded, digest = load("https://example.invalid/policy.json", hashlib.sha256(raw).hexdigest())
             self.assertEqual(loaded, policy)
             self.assertEqual(digest, hashlib.sha256(raw).hexdigest())
+            request = opener.return_value.open.call_args.args[0]
+            self.assertEqual(request.get_header("Accept"), "application/octet-stream")
         with patch("testgate.policy.build_opener") as opener:
             opener.return_value.open.side_effect = OSError("offline")
             with self.assertRaises(OSError):

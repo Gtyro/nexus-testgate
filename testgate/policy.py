@@ -6,7 +6,7 @@ import math
 from importlib.resources import files
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, build_opener
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 MAX_POLICY_BYTES = 262144
@@ -126,7 +126,8 @@ def load(source=None, expected_sha256=None):
     if source is None:
         raw = files("testgate").joinpath("default-policy.json").read_bytes()
     elif source.startswith("https://"):
-        with build_opener(HTTPSRedirects()).open(source, timeout=10) as response:
+        request = Request(source, headers={"Accept": "application/octet-stream", "User-Agent": "nexus-testgate"})
+        with build_opener(HTTPSRedirects()).open(request, timeout=20) as response:
             raw = response.read(MAX_POLICY_BYTES + 1)
     elif "://" in source:
         raise PolicyError("remote policies require HTTPS")

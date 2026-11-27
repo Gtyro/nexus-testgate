@@ -59,6 +59,8 @@ python /tmp/testgate.pyz
 
 也可以通过 `--policy`、`--policy-sha256` 显式传入。策略 URL 只能使用 HTTPS，重定向不得降级到 HTTP。下载错误、摘要不符、未知字段、格式不合法或不支持的约束一律失败，不回退到默认策略。每次结果记录完整策略摘要。
 
+若环境无法连接 `github.com`，可使用 GitHub API 的公开 release asset URL 下载文件：请求时带 `Accept: application/octet-stream`。Testgate 的 HTTPS 策略请求已包含此请求头，因此也支持 `https://api.github.com/repos/Gtyro/nexus-testgate/releases/assets/<策略资产ID>`。资产 ID 可从公开的 releases API 查询，无需登录。
+
 中央策略是受信任的配置，其中的 `command` 会实际执行。固定 `allow_command_override: false` 可拒绝命令覆盖。CI 还需固定执行器和策略摘要，并将对应检查设为合并必需项；本地运行工具不等于不可绕过的隔离环境。
 
 ## 可执行规则
