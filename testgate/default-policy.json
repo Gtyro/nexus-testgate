@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "default-v1",
+  "command": ["make", "test"],
+  "allow_command_override": true,
+  "limits": {
+    "seconds": 60,
+    "output_bytes": 65536,
+    "output_lines": 2000,
+    "line_bytes": 4096
+  },
+  "backend": {"type": "native"},
+  "checks": {}
+}

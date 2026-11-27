@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "docker-v1",
+  "command": ["make", "test"],
+  "allow_command_override": false,
+  "limits": {
+    "seconds": 60,
+    "output_bytes": 65536,
+    "output_lines": 1000,
+    "line_bytes": 4096
+  },
+  "backend": {
+    "type": "docker",
+    "image": "python:3.12-slim",
+    "memory_bytes": 1073741824,
+    "cpus": 2,
+    "pids": 128,
+    "tmpfs_bytes": 67108864,
+    "network": "none"
+  },
+  "checks": {}
+}

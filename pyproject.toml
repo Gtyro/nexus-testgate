@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-testgate"
+version = "0.1.0"
+description = "Portable test budgets and shared policy enforcement."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = []
+
+[project.scripts]
+testgate = "testgate.cli:main"
+
+[tool.setuptools]
+packages = ["testgate"]
+
+[tool.setuptools.package-data]
+testgate = ["default-policy.json"]

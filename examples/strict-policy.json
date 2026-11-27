@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "strict-v1",
+  "command": ["make", "test"],
+  "allow_command_override": false,
+  "limits": {
+    "seconds": 60,
+    "output_bytes": 65536,
+    "output_lines": 1000,
+    "line_bytes": 4096
+  },
+  "backend": {"type": "native"},
+  "checks": {
+    "junit": {"path": "reports/junit.xml", "min_tests": 1, "max_skipped": 0},
+    "coverage": {"path": "reports/coverage.xml", "min_line_rate": 0.8, "min_branch_rate": 0.7},
+    "artifacts": {"paths": ["reports"], "max_bytes": 10485760}
+  }
+}
