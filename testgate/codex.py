@@ -169,8 +169,8 @@ def uninstall(home, bin_dir=None):
     print(f"Uninstalled Codex integration: {destination}")
 
 
-def _download(url, maximum):
-    request = Request(url, headers={"Accept": "application/octet-stream", "User-Agent": OWNER})
+def _download(url, maximum, *, accept="application/octet-stream"):
+    request = Request(url, headers={"Accept": accept, "User-Agent": OWNER})
     with build_opener(HTTPSRedirects()).open(request, timeout=20) as response:
         raw = response.read(maximum + 1)
     if len(raw) > maximum:
@@ -180,7 +180,10 @@ def _download(url, maximum):
 
 def update_latest(home, bin_dir=None):
     record, launcher = _audit(_destination(home), bin_dir)
-    release = json.loads(_download("https://api.github.com/repos/Gtyro/nexus-testgate/releases/latest", 262144))
+    release = json.loads(_download(
+        "https://api.github.com/repos/Gtyro/nexus-testgate/releases/latest", 262144,
+        accept="application/vnd.github+json",
+    ))
     version = release["tag_name"].removeprefix("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("latest release does not have a supported version")

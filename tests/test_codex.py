@@ -11,6 +11,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from testgate import __version__
 from testgate.bundle import runtime_archive
@@ -143,7 +144,20 @@ class CodexIntegrationTests(unittest.TestCase):
         release = json.dumps({"tag_name": "v" + future_version, "assets": [
             {"name": "SHA256SUMS", "id": 1}, {"name": "testgate.pyz", "id": 2},
         ]}).encode()
-        with patch("testgate.codex._download", side_effect=[release, b"0" * 64 + b"  testgate.pyz\n", b"corrupt"]):
+
+        def github_responses(responses):
+            bodies = iter(responses)
+
+            def open_request(request, timeout):
+                accepted = {"application/json", "application/vnd.github+json"} if request.full_url.endswith("/releases/latest") else {"application/octet-stream"}
+                if request.get_header("Accept") not in accepted:
+                    raise HTTPError(request.full_url, 415, "Unsupported Media Type", {}, None)
+                return io.BytesIO(next(bodies))
+
+            return open_request
+
+        with patch("testgate.codex.build_opener") as opener:
+            opener.return_value.open.side_effect = github_responses([release, b"0" * 64 + b"  testgate.pyz\n", b"corrupt"])
             with self.assertRaisesRegex(ValueError, "SHA-256"):
                 update_latest(self.home, self.bin)
         self.assertEqual(fingerprint(self.home), original)
@@ -156,7 +170,8 @@ class CodexIntegrationTests(unittest.TestCase):
                 target.writestr(item, raw)
         future = output.getvalue()
         checksum = hashlib.sha256(future).hexdigest().encode() + b"  testgate.pyz\n"
-        with patch("testgate.codex._download", side_effect=[release, checksum, future]):
+        with patch("testgate.codex.build_opener") as opener:
+            opener.return_value.open.side_effect = github_responses([release, checksum, future])
             update_latest(self.home, self.bin)
         record = json.loads((self.skill / ".testgate-install.json").read_text())
         self.assertEqual(record["version"], future_version)
