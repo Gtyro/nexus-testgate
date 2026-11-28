@@ -4,7 +4,7 @@
   "command": ["make", "test"],
   "allow_command_override": false,
   "limits": {
-    "seconds": 60,
+    "seconds": 10,
     "output_bytes": 65536,
     "output_lines": 1000,
     "line_bytes": 4096

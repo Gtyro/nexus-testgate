@@ -13,8 +13,9 @@ destination.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory() as temporary:
     app = Path(temporary)
     shutil.copytree(root / "testgate", app / "testgate", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    (app / "__main__.py").write_text("from testgate.cli import main\nraise SystemExit(main())\n", encoding="utf-8")
     output = destination / "testgate.pyz"
-    zipapp.create_archive(app, output, interpreter="/usr/bin/env python3", main="testgate.cli:main", compressed=True)
+    zipapp.create_archive(app, output, interpreter="/usr/bin/env python3", compressed=True)
 digest = hashlib.sha256(output.read_bytes()).hexdigest()
 policy = destination / "default-policy.json"
 shutil.copyfile(root / "testgate" / "default-policy.json", policy)
