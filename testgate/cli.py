@@ -45,8 +45,15 @@ def main(argv=None):
         if args.json:
             args.json = outside_project(args.json, args.cwd)
         result, tail = run(policy, digest, args.cwd.resolve(), command or policy["command"], report_dir=args.report_dir)
+        timing = result.get("timing")
+        phase_summary = ""
+        if timing is not None:
+            execution = timing["execution_seconds"]
+            execution_summary = f"{execution:.3f}s" if execution is not None else "not started"
+            phase_summary = f"startup={timing['startup_seconds']:.3f}s; execution={execution_summary}; "
         print(
             f"{'PASS' if result['passed'] else 'FAIL'}: {result['seconds']:.3f}s; "
+            f"{phase_summary}"
             f"{result['output_bytes']} output bytes; {result['output_lines']} lines; "
             f"policy={result['policy']} sha256={digest[:12]}"
         )

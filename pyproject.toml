@@ -18,4 +18,4 @@ testgate = "testgate.cli:main"
 packages = ["testgate"]
 
 [tool.setuptools.package-data]
-testgate = ["default-policy.json", "integrations/codex/nexus-testgate/SKILL.md", "integrations/codex/nexus-testgate/scripts/run.py"]
+testgate = ["default-policy.json", "frontend/*.cjs", "integrations/codex/nexus-testgate/SKILL.md", "integrations/codex/nexus-testgate/scripts/run.py"]

@@ -12,6 +12,7 @@ from .backends import Backend
 from . import __version__
 from .reports import check_reports, snapshot
 from .locations import outside_project, temporary_parent
+from .timing import PhaseTiming
 
 
 TAIL_BYTES = 4096
@@ -44,6 +45,19 @@ def run(policy, digest, root, command, report_dir=None):
 
 
 def _run(policy, digest, root, command, report_dir):
+    timing = PhaseTiming(policy["timing"]) if "timing" in policy else None
+    try:
+        if timing is not None:
+            command = timing.prepare(
+                command, report_dir, docker=policy.get("backend", {}).get("type") == "docker",
+            )
+        return _supervise(policy, digest, root, command, report_dir, timing)
+    finally:
+        if timing is not None:
+            timing.close()
+
+
+def _supervise(policy, digest, root, command, report_dir, timing):
     checks = policy.get("checks", {})
     before = snapshot(report_dir, checks)
     backend = Backend(policy, root)
@@ -77,16 +91,28 @@ def _run(policy, digest, root, command, report_dir):
         )
         reader.start()
         while True:
-            remaining = limits["seconds"] - (time.monotonic() - started)
+            now = time.monotonic()
+            remaining = limits["seconds"] - (now - started)
             if remaining <= 0:
                 result["violations"].append("time budget exceeded")
                 result["exit_code"] = 124
                 break
+            if timing is not None:
+                timing.observe(now)
+                phase_remaining, phase = timing.remaining(now, started)
+                if phase_remaining <= 0:
+                    result["violations"].append(f"{phase} time budget exceeded")
+                    result["exit_code"] = 124
+                    break
+                remaining = min(remaining, phase_remaining)
             if eof and process.poll() is not None:
                 result["command_exit_code"] = process.returncode
                 if process.returncode:
                     result["violations"].append(f"test command exited with {process.returncode}")
                     result["exit_code"] = process.returncode if process.returncode > 0 else 128 - process.returncode
+                elif timing is not None and timing.execution_started is None:
+                    result["violations"].append(f"{timing.settings['adapter']} timing did not reach test execution")
+                    result["exit_code"] = 126
                 break
             try:
                 chunk = messages.get(timeout=min(remaining, 0.05))
@@ -117,6 +143,7 @@ def _run(policy, digest, root, command, report_dir):
                 result["exit_code"] = 125
                 break
     finally:
+        finished = time.monotonic()
         stopped.set()
         try:
             if process is not None or backend.name:
@@ -130,6 +157,8 @@ def _run(policy, digest, root, command, report_dir):
             if reader is not None:
                 reader.join(timeout=0.2)
     result["seconds"] = round(time.monotonic() - started, 6)
+    if timing is not None:
+        result["timing"] = timing.metrics(started, finished)
     if not result["violations"]:
         failures, metrics = check_reports(root, checks, before, report_root=report_dir)
         result["checks"] = metrics

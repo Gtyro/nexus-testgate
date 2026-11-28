@@ -10,6 +10,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 MAX_POLICY_BYTES = 262144
+DEFAULT_PHASE_SECONDS = 5
 
 
 class PolicyError(ValueError):
@@ -52,7 +53,7 @@ def relative_path(value):
 
 
 def validate(policy):
-    _keys(policy, ("version", "name", "command", "allow_command_override", "limits", "backend", "checks"), "policy")
+    _keys(policy, ("version", "name", "command", "allow_command_override", "limits", "backend", "checks", "timing"), "policy")
     if type(policy.get("version")) is not int or policy["version"] != 1:
         raise PolicyError("unsupported policy version; expected 1")
     if not isinstance(policy.get("name"), str) or not 1 <= len(policy["name"]) <= 80 or not policy["name"].isprintable():
@@ -70,6 +71,16 @@ def validate(policy):
         _number(limits[key], f"limits.{key}", minimum=0, integer=key != "seconds")
     if limits["seconds"] == 0:
         raise PolicyError("limits.seconds must be greater than zero")
+    if "timing" in policy:
+        timing = policy["timing"]
+        _keys(timing, ("adapter", "startup_seconds", "execution_seconds"), "timing")
+        if timing.get("adapter") not in ("pytest", "vitest", "jest", "playwright"):
+            raise PolicyError("timing.adapter must be pytest, vitest, jest or playwright")
+        for key in ("startup_seconds", "execution_seconds"):
+            value = timing.get(key, DEFAULT_PHASE_SECONDS)
+            _number(value, f"timing.{key}")
+            if value == 0:
+                raise PolicyError(f"timing.{key} must be greater than zero")
     backend = policy.get("backend", {"type": "native"})
     _keys(backend, ("type", "image", "memory_bytes", "cpus", "pids", "tmpfs_bytes", "network"), "backend")
     if backend.get("type") == "native":

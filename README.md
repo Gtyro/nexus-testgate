@@ -107,7 +107,7 @@ python /tmp/testgate.pyz
 | 行/分支覆盖率 | 读取本次生成的 Cobertura XML，低于阈值则不通过 |
 | 产物大小 | 测试结束后计算指定文件/目录大小，超限失败 |
 
-规则示例见 [严格策略](examples/strict-policy.json) 和 [Docker 策略](examples/docker-policy.json)。所有预算值均集中在策略中，不从项目文件隐式读取，也不能通过 CLI 参数悄悄放宽。
+规则示例见 [严格策略](examples/strict-policy.json)、[Docker 策略](examples/docker-policy.json) 和 [pytest 分阶段策略](examples/pytest-policy.json)。所有预算值均集中在策略中，不从项目文件隐式读取，也不能通过 CLI 参数悄悄放宽。
 
 JUnit/Cobertura 报告是可选适配：启用后必须存在且本次重新生成，旧报告、空用例报告（默认最少 1 项）、缺失报告和无效格式都会失败。报告路径相对于工具提供的仓库外报告目录。pytest 可以这样执行，不改项目配置：
 
@@ -118,6 +118,45 @@ testgate --policy /outside-project/policy.json -- python -m pytest -q '--junitxm
 `{testgate_reports}` 在传入测试命令前替换为实际目录；测试进程也能通过 `TESTGATE_REPORT_DIR` 环境变量取得该目录。覆盖率报告需要项目已有的覆盖率工具。Testgate 不自动安装插件，也不将总覆盖率当成变更覆盖率。
 
 JUnit 按实际 `testcase` 元素计数，而非相信汇总数量。当前不推断重试次数，也不做变异测试、变更覆盖率或测试价值判断。源代码和测试报告均由被检查项目产生，防止蓄意伪造还需要受保护的 CI。
+
+## 依赖加载与测试执行分开计时
+
+启用分阶段计时后，加载与收集、测试执行的默认上限各为 5 秒。整次命令仍受 `limits.seconds` 约束，内置总上限为 10 秒。在中央策略中显式增加 `timing` 即可启用，例如：
+
+```json
+{
+  "timing": {
+    "adapter": "pytest",
+    "startup_seconds": 5,
+    "execution_seconds": 5
+  }
+}
+```
+
+以上是策略片段，完整配置见 [pytest 分阶段策略](examples/pytest-policy.json)。`startup_seconds` 和 `execution_seconds` 均可省略，省略时各使用 5 秒；也可单独覆盖其中一项，显式值必须为大于零的有限数值。这三个时间预算同时生效；只增加 `timing` 不会放宽已有的总上限。未启用 `timing` 时仍只限制整次命令。
+
+`timing.adapter` 支持 `pytest`、`vitest`、`jest` 和 `playwright`。pytest 要求直接使用目标环境的 Python，例如 `python -m pytest -q` 或 `/path/to/venv/bin/python -m pytest -q`。前端框架使用已安装的项目依赖，不通过 npm/npx 自动下载工具。
+
+| 适配器 | 支持的直接命令 | 启动阶段结束的位置 |
+| --- | --- | --- |
+| pytest | `python -m pytest ...` | 用例收集完成，进入执行循环 |
+| Vitest | `vitest run ...` | 首个包含测试的模块加载、收集完成 |
+| Jest | `jest ...` | 首个测试文件加载完成，执行注入的第一个 `beforeAll` |
+| Playwright Test | `playwright test ...` | 首个 worker 完成加载，发出 `onTestBegin`，开始 fixture 和 hooks |
+
+前端也支持 `node node_modules/vitest/vitest.mjs run ...`、`node node_modules/jest/bin/jest.js ...` 和 `node node_modules/@playwright/test/cli.js test ...`，可将 `node` 换成指定版本的绝对路径。直接框架命令由 PATH 中的 Node 运行；依赖始终从目标工作目录解析，框架本身无须加入 PATH。`make test`、`npm test`、`npx` 等间接入口、pytest 启动脚本及带额外解释器选项的命令不支持阶段适配，启用后会在运行前报错。未启用 `timing` 的命令不受此限制。
+
+```bash
+testgate --policy /outside-project/pytest-policy.json
+```
+
+计时从测试命令启动前开始，到上述边界前的时间全部计入 `startup_seconds`，包括解释器启动、依赖和插件加载、初始用例收集及模块顶层初始化。之后到命令退出的时间计入 `execution_seconds`，包括 fixture 的 setup/teardown、测试内动态 import、外部请求等待和命令自身清理。前端框架可能交错加载和执行多个文件；首次进入执行阶段后，后续文件和其他 worker 的加载也计入执行时间，不会暂停执行预算或按请求类型扣除时间。总上限及任一阶段超时均返回 124，失败原因区分总耗时、启动耗时和执行耗时。
+
+完整前端策略见 [Vitest](examples/vitest-policy.json)、[Jest](examples/jest-policy.json) 和 [Playwright](examples/playwright-policy.json)，示例均使用加载 5 秒、执行 5 秒、总计 10 秒。示例为便于比较采用单 worker，但适配器不强制改变项目的并发设置。已验证 Vitest 3.2、Jest 30 和 Playwright Test 1.56；前端的 watch/UI/debug 和只列出用例等模式会被拒绝。Playwright 需要的浏览器应预先准备，适配器不安装浏览器。已有的 `PW_TEST_REPORTER` 会与附加计时报告器冲突，启用时会明确报错。
+
+CLI 摘要和 JSON 的 `timing` 字段分别给出两个阶段的实际耗时；尚未开始执行时 `execution_seconds` 为 `null`。适配器只使用仓库外的临时文件，不要求目标项目安装 Testgate 或修改配置，并保留项目原有配置和报告器。框架必须已存在于目标环境中。源码、单文件和 Docker 后端共用同一适配器。pytest 当前支持单进程会话，显式拒绝 pytest-xdist worker；未收到执行阶段信号的成功命令也不会通过阶段检查。
+
+阶段转换由监督进程轮询确认，正常轮询间隔最多 50 毫秒，边界附近存在调度和文件读取误差，不适合毫秒级基准测试。容器启动属于启动阶段；Testgate 自身的终止、容器清理和报告分析不占用阶段预算，仍会增加实际等待时间。
 
 ## Docker 执行
 
@@ -147,7 +186,7 @@ python /path/to/testgate.pyz --show-policy
 | 2 | 策略、环境或启动错误 |
 | 124 | 测试时间超限 |
 | 125 | 输出超限 |
-| 126 | 报告或产物检查失败 |
+| 126 | 报告、产物或阶段计时检查失败 |
 | 其他 | 保留测试命令失败码，信号映射为 128 + 信号编号 |
 
 测试命令也可能使用上述退出码，机器判断原因请读取 JSON 的 `violations` 和 `command_exit_code`。
@@ -155,6 +194,8 @@ python /path/to/testgate.pyz --show-policy
 耗时预算包含命令启动、测试收集、准备、执行和命令自身清理；Docker 守护进程探测及容器创建在计时前完成，各设 10 秒和 30 秒上限。终止、容器清理和报告分析仍有额外开销，不提供实时系统保证。原生后端终止整个进程组，无法管理主动脱离该组的进程；需要完整资源边界时采用 Docker 后端。镜像必须预先准备，门禁不会隐式下载镜像。
 
 ## 开发与公开发布
+
+运行时仍只依赖标准库；验证 pytest 阶段适配器需要开发环境预先安装 pytest 7/8。前端集成验证还需 Node 和仓库外已安装的 Vitest、Jest、`@playwright/test`，通过 `TESTGATE_FRONTEND_NODE_MODULES` 指向该环境的 `node_modules`。缺少相应依赖时跳过该组集成测试，CI 会安装测试依赖并运行它们。前端夹具不使用浏览器，无需下载浏览器。
 
 ```bash
 python -m unittest discover -s tests -v
@@ -169,5 +210,5 @@ GitHub Actions 自动测试 Linux/macOS/Windows 上的 Python 3.10 和 3.12；Wi
 手动运行 Docker 验证：
 
 ```bash
-TESTGATE_DOCKER_TEST_IMAGE=python:3.11-slim python -m unittest discover -s tests -k DockerTests -v
+TESTGATE_DOCKER_TEST_IMAGE=python:3.11-slim python -m unittest discover -s tests -k Docker -v
 ```

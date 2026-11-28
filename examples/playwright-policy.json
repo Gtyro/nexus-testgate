@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "playwright-phases-v1",
+  "command": ["playwright", "test", "--workers=1"],
+  "allow_command_override": false,
+  "limits": {
+    "seconds": 10,
+    "output_bytes": 65536,
+    "output_lines": 2000,
+    "line_bytes": 4096
+  },
+  "timing": {
+    "adapter": "playwright",
+    "startup_seconds": 5,
+    "execution_seconds": 5
+  },
+  "backend": {"type": "native"},
+  "checks": {}
+}
